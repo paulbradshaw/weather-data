@@ -1,0 +1,194 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Combining 170 CSV files showing daily weather across the UK since 1960
+
+You can get historical data for weather across the UK down to 5km squares. However, these are split across 170 different datasets for different parts of the country. We need to use R to combine them and then drill down to a particular day.
+
+## Combining CSVs
+
+We've adapted the [code explained here](https://psychwire.wordpress.com/2011/06/03/merge-all-files-in-a-directory-using-r-into-a-single-dataframe/). 
+
+Here's the original code:
+
+```{r}
+setwd("target_dir/")
+ 
+file_list <- list.files()
+ 
+for (file in file_list){
+       
+  # if the merged dataset doesn't exist, create it
+  if (!exists("dataset")){
+    dataset <- read.table(file, header=TRUE, sep="\t")
+  }
+   
+  # if the merged dataset does exist, append to it
+  if (exists("dataset")){
+    temp_dataset <-read.table(file, header=TRUE, sep="\t")
+    dataset<-rbind(dataset, temp_dataset)
+    rm(temp_dataset)
+  }
+ 
+}
+```
+
+We need to get two of the CSVs into a sub-folder to test this out. We'll call it 'combine'.
+
+Here the code is adapted slightly with comments to explain:
+
+```{r}
+#Specify the name of a folder within our directory
+setwd("combine")
+ 
+file_list <- list.files()
+ 
+for (file in file_list){
+       
+  # if the merged dataset doesn't exist, create it
+  if (!exists("dataset")){
+    dataset <- read.table(file, header=TRUE, sep=",") #change separator to comma
+  }
+   
+  # if the merged dataset does exist, append to it
+  if (exists("dataset")){
+    temp_dataset <-read.table(file, header=TRUE, sep=",") #change separator to comma
+    #change rbind to cbind because we're joining new columns
+    dataset<-cbind(dataset, temp_dataset) 
+    rm(temp_dataset)
+  }
+ 
+}
+```
+
+This gives us a working dataset with the right number of observations (20,821 works out at 57 years times 365 days plus some leap year days)
+
+We still have headers across two columns, but those can be extracted later. In fact it might be better to not have them as headings at all, but instead as data.
+
+```{r}
+eastings <- scan(file, skip=0, nlines = 1, what = character())
+northing <- scan(file, skip=1, nlines = 1, what = character())
+#Import without header so that easting and northing are both rows of data
+dataset <- read.table(file, header=FALSE, sep=",") 
+```
+
+
+```{r}
+file_list <- list.files()
+ 
+for (file in file_list){
+       
+  # if the merged dataset doesn't exist, create it
+  if (!exists("dataset")){
+    #eastings <- scan(file, skip=0, nlines = 1, what = character())
+    #northing <- scan(file, skip=1, nlines = 1, what = character())
+    dataset <- read.table(file, header=FALSE, sep=",") #change separator to comma
+  }
+   
+  # if the merged dataset does exist, append to it
+  if (exists("dataset")){
+    #temp_eastings <- scan(file, skip=0, nlines = 1, what = character())
+    #temp_northing <- scan(file, skip=1, nlines = 1, what = character())
+    temp_dataset <-read.table(file, header=FALSE, sep=",") #change separator to comma
+    #change rbind to cbind because we're joining new columns
+    dataset<-cbind(dataset, temp_dataset) 
+    #eastings <- c(eastings,temp_eastings)
+    #northing <- c(northing,temp_northing)
+    rm(temp_dataset)
+  }
+ 
+}
+```
+
+## Filtering to one day - test
+
+Now to test filtering:
+
+```{r}
+#Activate the dplyr package which we need for the filter function
+library(dplyr)
+#An example: filter the dataset to those rows were the column V1 contains this date:
+march1 <- filter(dataset, V1 == "2001-03-01")
+#But we want to be less fussy, so combine with grepl to use a regular expression:
+march1 <- filter(dataset, grepl("200[0-9]-03-01",V1))
+#That captures 2000-2009, but let's be even less fussy
+march1 <- filter(dataset, grepl("[0-9]{4}-03-01",V1))
+#more at http://neondataskills.org/R/GREPL-Filter-Piping-in-DPLYR-Using-R/
+```
+
+Can we filter at source?
+
+```{r}
+file_list <- list.files()
+#rm(march1) 
+for (file in file_list){
+       
+  # if the merged dataset doesn't exist, create it
+  if (!exists("march1")){
+    #eastings <- scan(file, skip=0, nlines = 1, what = character())
+    #northing <- scan(file, skip=1, nlines = 1, what = character())
+    dataset <- read.table(file, header=FALSE, sep=",") #change separator to comma
+    march1 <- filter(dataset, grepl("[0-9]{4}-03-01",V1))
+  }
+   
+  # if the merged dataset does exist, append to it
+  if (exists("march1")){
+    #temp_eastings <- scan(file, skip=0, nlines = 1, what = character())
+    #temp_northing <- scan(file, skip=1, nlines = 1, what = character())
+    temp_dataset <-read.table(file, header=FALSE, sep=",") #change separator to comma
+    #change rbind to cbind because we're joining new columns
+    temp_march1 <- filter(temp_dataset, grepl("[0-9]{4}-03-01",V1))
+    march1 <-cbind(march1, temp_march1) 
+    #eastings <- c(eastings,temp_eastings)
+    #northing <- c(northing,temp_northing)
+    rm(temp_dataset)
+  }
+ 
+}
+
+```
+
+This doesn't grab easting and northing so let's do that separately:
+
+```{r}
+file_list <- list.files()
+#rm(march1) 
+for (file in file_list){
+       
+  # if the merged dataset doesn't exist, create it
+  if (!exists("eastingnorthing")){
+    dataset <- read.table(file, header=FALSE, sep=",") #change separator to comma
+    eastingnorthing <- filter(dataset, grepl("easting|northing",V1))
+  }
+   
+  # if the merged dataset does exist, append to it
+  if (exists("eastingnorthing")){
+    temp_dataset <-read.table(file, header=FALSE, sep=",") #change separator to comma
+    #change rbind to cbind because we're joining new columns
+    temp_eastingnorthing <- filter(temp_dataset, grepl("easting|northing",V1))
+    eastingnorthing <-cbind(eastingnorthing, temp_eastingnorthing) 
+    rm(temp_dataset)
+  }
+ 
+}
+
+```
+
+Now to combine them:
+
+```{r}
+march1withEastings <- rbind(eastingnorthing,march1noeastings)
+write.csv(march1withEastings,"march1withEastings.csv")
+```
+
+
+
+## Doing it all over again - with all the CSVs
+
+Now we know that works, let's try to combine all the data. 
+
+First, we move all the CSVs into that 'combine' directory we identified earlier. 
+
+
