@@ -5,11 +5,21 @@ output: html_notebook
 
 # Combining 170 CSV files showing daily weather across the UK since 1960
 
-You can get historical data for weather across the UK down to 5km squares. However, these are split across 170 different datasets for different parts of the country. We need to use R to combine them and then drill down to a particular day.
+You can get historical data for weather across the UK down to 5km squares. You will need to register for an account with CEDA, then you can [download the data from the page for UKCP09: Met Office gridded and regional land surface climate observation datasets](http://catalogue.ceda.ac.uk/uuid/87f43af9d02e42f483351d79b3d6162a)
+
+Click on [the *timeseries* folder](http://data.ceda.ac.uk/badc/ukcp09/data/gridded-land-obs/gridded-land-obs-daily/timeseries/) and you can choose from datasets for maximum temperature, minimum temperature, mean temperature, or rainfall for each day since 1960.
+
+However, these are split across 170 different datasets for different parts of the country. We need to use R to combine them and then drill down to a particular day.
+
+## Download the CSVs
+
+First you need to download all the CSVs into one folder. This should be the same place where your R project is going to be. In the upper right corner of the webpage is an option to *Download multiple files*. Leave the asterisk in the box next to that and click the **Go** button next to that.
+
+This should take you to a list of all the files, and a button to **Download**. Click that to begin downloading all of them. Beware: you'll need lots of spare room - it takes up over 1 GB (1764475727 bytes to be specific).
 
 ## Combining CSVs
 
-We've adapted the [code explained here](https://psychwire.wordpress.com/2011/06/03/merge-all-files-in-a-directory-using-r-into-a-single-dataframe/). 
+To combine those CSVs I've adapted the [code explained here](https://psychwire.wordpress.com/2011/06/03/merge-all-files-in-a-directory-using-r-into-a-single-dataframe/). 
 
 Here's the original code:
 
@@ -74,6 +84,7 @@ northing <- scan(file, skip=1, nlines = 1, what = character())
 dataset <- read.table(file, header=FALSE, sep=",") 
 ```
 
+Let's add that code to our loop. Also, given that we're now not using the Eastings as headings, we should adapt the code so that it doesn't look for a heading row at all - see the comments added below:
 
 ```{r}
 file_list <- list.files()
@@ -82,20 +93,20 @@ for (file in file_list){
        
   # if the merged dataset doesn't exist, create it
   if (!exists("dataset")){
-    #eastings <- scan(file, skip=0, nlines = 1, what = character())
-    #northing <- scan(file, skip=1, nlines = 1, what = character())
-    dataset <- read.table(file, header=FALSE, sep=",") #change separator to comma
+    eastings <- scan(file, skip=0, nlines = 1, what = character())
+    northing <- scan(file, skip=1, nlines = 1, what = character())
+    dataset <- read.table(file, header=FALSE, sep=",") #change header to FALSE
   }
    
   # if the merged dataset does exist, append to it
   if (exists("dataset")){
-    #temp_eastings <- scan(file, skip=0, nlines = 1, what = character())
-    #temp_northing <- scan(file, skip=1, nlines = 1, what = character())
-    temp_dataset <-read.table(file, header=FALSE, sep=",") #change separator to comma
+    temp_eastings <- scan(file, skip=0, nlines = 1, what = character())
+    temp_northing <- scan(file, skip=1, nlines = 1, what = character())
+    temp_dataset <-read.table(file, header=FALSE, sep=",") #change header to FALSE
     #change rbind to cbind because we're joining new columns
     dataset<-cbind(dataset, temp_dataset) 
-    #eastings <- c(eastings,temp_eastings)
-    #northing <- c(northing,temp_northing)
+    eastings <- c(eastings,temp_eastings)
+    northing <- c(northing,temp_northing)
     rm(temp_dataset)
   }
  
@@ -104,7 +115,7 @@ for (file in file_list){
 
 ## Filtering to one day - test
 
-Now to test filtering:
+Now to test filtering - let's say we don't need all the data but only one day for every year (if we're testing how cold it was on this day in the past):
 
 ```{r}
 #Activate the dplyr package which we need for the filter function
@@ -187,8 +198,33 @@ write.csv(march1withEastings,"march1withEastings.csv")
 
 ## Doing it all over again - with all the CSVs
 
-Now we know that works, let's try to combine all the data. 
+Now we know that works, we can try to combine all the data. 
 
-First, we move all the CSVs into that 'combine' directory we identified earlier. 
+First, we move all the CSVs into that 'combine' directory we identified earlier. Then we re-run the code. This time, `list.files()` should fetch all of those. 
+
+
+```{r}
+file_list <- list.files()
+#rm(march1) 
+for (file in file_list){
+       
+  # if the merged dataset doesn't exist, create it
+  if (!exists("eastingnorthing")){
+    dataset <- read.table(file, header=FALSE, sep=",") #change separator to comma
+    eastingnorthing <- filter(dataset, grepl("easting|northing",V1))
+  }
+   
+  # if the merged dataset does exist, append to it
+  if (exists("eastingnorthing")){
+    temp_dataset <-read.table(file, header=FALSE, sep=",") #change separator to comma
+    #change rbind to cbind because we're joining new columns
+    temp_eastingnorthing <- filter(temp_dataset, grepl("easting|northing",V1))
+    eastingnorthing <-cbind(eastingnorthing, temp_eastingnorthing) 
+    rm(temp_dataset)
+  }
+ 
+}
+
+```
 
 
